@@ -49,21 +49,10 @@ export class CSGOperationsManager {
             // 将 Brush 转换为 Mesh 并添加到场景
             const geometry = this.brushToGeometry(resultBrush);
             if (geometry) {
-                const material = new THREE.MeshLambertMaterial({ 
-                    color: 0x00aa00,
-                    transparent: false,
-                    opacity: 1.0
-                });
+                // 创建法向面组mesh
+                this.createFaceGroupMeshes(geometry, index);
                 
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                mesh.userData.wallIndex = index;
-                
-                this.app.scene.add(mesh);
-                this.app.wallMeshes.push(mesh);
-                
-                // 添加轮廓边缘线
+                // 添加轮廓边缘线（黄色）
                 const outlineGeometry = this.app.outlineExtractor.createOutlineGeometry(geometry);
                 if (outlineGeometry) {
                     const outlineLine = new THREE.LineSegments(
@@ -90,6 +79,140 @@ export class CSGOperationsManager {
         }
         
         console.log('=== CSG 墙体创建完成 ===');
+    }
+
+    /**
+     * 创建法向面组mesh（始终创建，用于选择）
+     */
+    createFaceGroupMeshes(geometry, wallIndex) {
+        const positions = geometry.attributes.position;
+        const vertexCount = positions.count;
+        const triangleCount = vertexCount / 3;
+        
+        console.log(`\n=== 创建墙体 ${wallIndex} 的法向面组 ===`);
+        
+        // 改进的法向面合并：不仅检查法向量，还要检查面的位置
+        const normalGroups = [];
+        const normalTolerance = 0.01;
+        const positionTolerance = 0.01; // 10mm
+        
+        for (let i = 0; i < triangleCount; i++) {
+            const i0 = i * 3;
+            const i1 = i * 3 + 1;
+            const i2 = i * 3 + 2;
+            
+            const v0 = new THREE.Vector3(positions.getX(i0), positions.getY(i0), positions.getZ(i0));
+            const v1 = new THREE.Vector3(positions.getX(i1), positions.getY(i1), positions.getZ(i1));
+            const v2 = new THREE.Vector3(positions.getX(i2), positions.getY(i2), positions.getZ(i2));
+            
+            const edge1 = new THREE.Vector3().subVectors(v1, v0);
+            const edge2 = new THREE.Vector3().subVectors(v2, v0);
+            const normal = new THREE.Vector3().crossVectors(edge1, edge2);
+            
+            const area = normal.length() / 2;
+            if (area < 0.000001) continue;
+            
+            normal.normalize();
+            
+            // 计算三角形中心点
+            const center = new THREE.Vector3()
+                .add(v0)
+                .add(v1)
+                .add(v2)
+                .divideScalar(3);
+            
+            // 查找相似法向量且位置接近的组
+            let foundGroup = false;
+            for (let group of normalGroups) {
+                const similarity = Math.abs(group.normal.dot(normal));
+                
+                // 检查法向量是否相似
+                if (similarity > 1 - normalTolerance) {
+                    // 检查位置是否接近（在同一平面上）
+                    const distanceToPlane = Math.abs(group.normal.dot(
+                        new THREE.Vector3().subVectors(center, group.center)
+                    ));
+                    
+                    if (distanceToPlane < positionTolerance) {
+                        group.triangles.push({ v0, v1, v2 });
+                        // 更新组的中心点（平均值）
+                        group.center.add(center).divideScalar(2);
+                        foundGroup = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!foundGroup) {
+                normalGroups.push({
+                    normal: normal.clone(),
+                    center: center.clone(),
+                    triangles: [{ v0, v1, v2 }]
+                });
+            }
+        }
+        
+        console.log(`法向面分组: ${normalGroups.length} 组`);
+        
+        // 为每个法向面组创建mesh
+        const colors = [
+            0xff3333, // 亮红
+            0x33ff33, // 亮绿
+            0x3333ff, // 亮蓝
+            0xffff33, // 亮黄
+            0xff33ff, // 亮品红
+            0x33ffff, // 亮青
+            0xff9933, // 亮橙
+            0x9933ff, // 亮紫
+            0xff3399, // 亮粉
+            0x99ff33, // 亮黄绿
+            0x3399ff, // 亮天蓝
+            0xff9966  // 亮珊瑚
+        ];
+        
+        normalGroups.forEach((group, groupIndex) => {
+            const color = colors[groupIndex % colors.length];
+            
+            const groupPositions = [];
+            group.triangles.forEach(tri => {
+                groupPositions.push(
+                    tri.v0.x, tri.v0.y, tri.v0.z,
+                    tri.v1.x, tri.v1.y, tri.v1.z,
+                    tri.v2.x, tri.v2.y, tri.v2.z
+                );
+            });
+            
+            const groupGeometry = new THREE.BufferGeometry();
+            groupGeometry.setAttribute('position', new THREE.Float32BufferAttribute(groupPositions, 3));
+            groupGeometry.computeVertexNormals();
+            
+            // 使用彩色半透明材质，便于区分不同的面组
+            const material = new THREE.MeshLambertMaterial({ 
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.3,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            });
+            
+            const mesh = new THREE.Mesh(groupGeometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData.wallIndex = wallIndex;
+            mesh.userData.faceGroupIndex = groupIndex;
+            mesh.userData.isFaceGroup = true;
+            
+            // 始终可见
+            mesh.visible = true;
+            
+            this.app.scene.add(mesh);
+            this.app.wallMeshes.push(mesh);
+            
+            const centerStr = `(${group.center.x.toFixed(2)}, ${group.center.y.toFixed(2)}, ${group.center.z.toFixed(2)})`;
+            const normalStr = `(${group.normal.x.toFixed(2)}, ${group.normal.y.toFixed(2)}, ${group.normal.z.toFixed(2)})`;
+            console.log(`  组 ${groupIndex}: 颜色=#${color.toString(16).padStart(6, '0')}, 三角形=${group.triangles.length}, 中心=${centerStr}, 法向=${normalStr}`);
+        });
     }
 
     createWallBrush(wall) {

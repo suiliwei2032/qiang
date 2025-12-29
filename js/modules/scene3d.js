@@ -17,12 +17,13 @@ export class Scene3DManager {
             this.app.scene = new THREE.Scene();
             this.app.scene.background = new THREE.Color(0x001133);
             
-            // 创建相机
+            // 创建相机（带俯视角度）
             const container = this.app.canvas3d.parentElement;
             const rect = container.getBoundingClientRect();
             
             this.app.camera = new THREE.PerspectiveCamera(75, rect.width / rect.height, 0.1, 1000);
-            this.app.camera.position.set(5, 5, 5);
+            // 设置相机位置：稍微偏后和偏上，形成俯视角度
+            this.app.camera.position.set(0, 8, 5);
             this.app.camera.lookAt(0, 0, 0);
             
             // 创建渲染器

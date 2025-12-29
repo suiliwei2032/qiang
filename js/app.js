@@ -5,6 +5,7 @@ import { WallGeometryManager } from './modules/wallGeometry.js';
 import { CSGOperationsManager } from './modules/csgOperations.js';
 import { OutlineExtractor } from './modules/outlineExtractor.js';
 import { Scene3DManager } from './modules/scene3d.js';
+import { OutlineGenerator } from './modules/outlineGenerator.js';
 
 // 主应用类
 class WallEditorApp {
@@ -52,6 +53,7 @@ class WallEditorApp {
         this.csgOperations = new CSGOperationsManager(this);
         this.outlineExtractor = new OutlineExtractor();
         this.scene3dManager = new Scene3DManager(this);
+        this.outlineGenerator = new OutlineGenerator();
     }
 
     init() {
@@ -145,74 +147,55 @@ class WallEditorApp {
     handle3DClick(e) {
         if (!this.scene || !this.camera) return;
         
+        // 只在选择模式下响应点击
+        if (this.currentMode !== 'select') return;
+        
         const rect = this.canvas3d.getBoundingClientRect();
         this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        const intersects = this.raycaster.intersectObjects(this.wallMeshes, false);
+        
+        // 只检测面组mesh，过滤掉轮廓线和线框
+        const faceGroupMeshes = this.wallMeshes.filter(obj => obj.userData.isFaceGroup);
+        const intersects = this.raycaster.intersectObjects(faceGroupMeshes, false);
         
         if (intersects.length > 0) {
-            const intersectedObject = intersects[0].object;
+            const intersection = intersects[0];
+            const intersectedObject = intersection.object;
             
-            if (this.selectedFaceGroup && this.selectedFaceGroup.material.emissive) {
+            console.log('\n=== 选中墙面 ===');
+            console.log('墙体索引:', intersectedObject.userData.wallIndex);
+            console.log('面组索引:', intersectedObject.userData.faceGroupIndex);
+            console.log('点击的三角形索引:', intersection.faceIndex);
+            
+            // 取消之前选中的面的高亮
+            if (this.selectedFaceGroup) {
                 this.selectedFaceGroup.material.emissive.setHex(0x000000);
+                this.selectedFaceGroup.material.emissiveIntensity = 0;
             }
             
-            if (intersectedObject.material && intersectedObject.material.emissive) {
-                this.selectedFaceGroup = intersectedObject;
-                this.selectedFaceGroup.material.emissive.setHex(0x555555);
-                console.log('选中墙体:', this.selectedFaceGroup.userData);
-                this.updateStatus('已选中墙体，使用方向键移动');
-            }
+            // 高亮新选中的面
+            this.selectedFaceGroup = intersectedObject;
+            this.selectedFaceGroup.material.emissive.setHex(0xffaa00);
+            this.selectedFaceGroup.material.emissiveIntensity = 0.8;
+            
+            // 记录选中的墙体索引
+            this.selectedWallIndex = intersectedObject.userData.wallIndex;
+            
+            // 显示选中墙体的轮廓到右下窗口（使用2D数据）
+            this.displayWallOutlineFrom2D();
+            
+            this.updateStatus('已选中墙面 - 查看右下窗口的外轮廓');
         }
     }
-
+    
     handleKeyDown(e) {
-        if (!this.selectedFaceGroup) return;
-        
-        const moveStep = 0.01; // 10mm
-        let moved = false;
-        
-        switch(e.key) {
-            case 'ArrowLeft':
-                this.selectedFaceGroup.position.x -= moveStep;
-                moved = true;
-                break;
-            case 'ArrowRight':
-                this.selectedFaceGroup.position.x += moveStep;
-                moved = true;
-                break;
-            case 'ArrowUp':
-                if (e.ctrlKey) {
-                    this.selectedFaceGroup.position.z -= moveStep;
-                } else {
-                    this.selectedFaceGroup.position.y += moveStep;
-                }
-                moved = true;
-                break;
-            case 'ArrowDown':
-                if (e.ctrlKey) {
-                    this.selectedFaceGroup.position.z += moveStep;
-                } else {
-                    this.selectedFaceGroup.position.y -= moveStep;
-                }
-                moved = true;
-                break;
-            case 'Escape':
-                if (this.selectedFaceGroup.material.emissive) {
-                    this.selectedFaceGroup.material.emissive.setHex(0x000000);
-                }
-                this.selectedFaceGroup = null;
-                this.updateStatus('已取消选择');
-                break;
-        }
-        
-        if (moved) {
-            const pos = this.selectedFaceGroup.position;
-            console.log(`位置: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`);
-            e.preventDefault();
-        }
+        // 键盘移动功能已移除，选择墙面功能不需要移动
+    }
+    
+    handleKeyDown(e) {
+        // 键盘移动功能已移除，选择墙面功能不需要移动
     }
 
     handleMouseDown(e) {
@@ -451,6 +434,219 @@ class WallEditorApp {
             statusText.textContent = message;
         }
         console.log('状态:', message);
+    }
+    
+    /**
+     * 从2D墙体数据显示轮廓
+     * 根据选中的面组类型（顶面/底面/侧面）生成对应的轮廓
+     */
+    displayWallOutlineFrom2D() {
+        if (this.selectedWallIndex === undefined || !this.selectedFaceGroup) return;
+        
+        const canvasOutline = document.getElementById('canvas-outline');
+        if (!canvasOutline) return;
+        
+        const ctx = canvasOutline.getContext('2d');
+        
+        console.log('\n=== 显示墙体轮廓（从2D数据）===');
+        console.log(`选中墙体索引: ${this.selectedWallIndex}`);
+        console.log(`面组索引: ${this.selectedFaceGroup.userData.faceGroupIndex}`);
+        
+        const wall = this.walls[this.selectedWallIndex];
+        if (!wall) {
+            console.log('找不到墙体数据');
+            return;
+        }
+        
+        // 获取面组的法向量（从第一个三角形）
+        const geometry = this.selectedFaceGroup.geometry;
+        const positions = geometry.attributes.position;
+        
+        if (!positions || positions.count < 3) {
+            console.log('面组没有几何数据');
+            return;
+        }
+        
+        const v0 = new THREE.Vector3(positions.getX(0), positions.getY(0), positions.getZ(0));
+        const v1 = new THREE.Vector3(positions.getX(1), positions.getY(1), positions.getZ(1));
+        const v2 = new THREE.Vector3(positions.getX(2), positions.getY(2), positions.getZ(2));
+        
+        const edge1 = new THREE.Vector3().subVectors(v1, v0);
+        const edge2 = new THREE.Vector3().subVectors(v2, v0);
+        const normal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+        
+        console.log(`面组法向: (${normal.x.toFixed(2)}, ${normal.y.toFixed(2)}, ${normal.z.toFixed(2)})`);
+        
+        // 判断面的类型并生成轮廓
+        let polygons = [];
+        let faceType = '';
+        
+        if (Math.abs(normal.y) > 0.9) {
+            // 水平面（顶面或底面）
+            faceType = normal.y > 0 ? '顶面' : '底面';
+            console.log(`面类型: ${faceType}`);
+            const rect = this.outlineGenerator.getTopBottomRectangle(wall);
+            polygons = [rect];
+        } else {
+            // 垂直面（侧面）
+            faceType = this.outlineGenerator.determineFaceType(wall, normal);
+            console.log(`面类型: ${faceType}`);
+            const segments = this.outlineGenerator.getSideRectangles(wall, normal, this.walls);
+            polygons = segments;
+        }
+        
+        if (polygons.length === 0 || polygons[0].length === 0) {
+            console.log('无法生成轮廓');
+            return;
+        }
+        
+        console.log(`轮廓多边形数: ${polygons.length}`);
+        
+        // 绘制到画布
+        this.drawPolygonsToCanvas(ctx, canvasOutline, polygons, faceType);
+    }
+    
+    /**
+     * 绘制多个多边形到画布（保持真实比例，高分辨率）
+     */
+    drawPolygonsToCanvas(ctx, canvas, polygons, faceType) {
+        // 提高画布分辨率（使用设备像素比）
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        
+        // 设置画布的实际像素尺寸
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        
+        // 缩放上下文以匹配设备像素比
+        ctx.scale(dpr, dpr);
+        
+        // 使用CSS尺寸
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+        
+        ctx.clearRect(0, 0, displayWidth, displayHeight);
+        
+        // 计算所有多边形的总边界框
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        
+        polygons.forEach(polygon => {
+            polygon.forEach(p => {
+                minX = Math.min(minX, p.x);
+                maxX = Math.max(maxX, p.x);
+                minY = Math.min(minY, p.y);
+                maxY = Math.max(maxY, p.y);
+            });
+        });
+        
+        const width = maxX - minX;
+        const height = maxY - minY;
+        const padding = 50;
+        
+        if (width < 0.001 || height < 0.001) {
+            console.log('轮廓尺寸太小，无法显示');
+            return;
+        }
+        
+        // 使用统一的缩放比例，保持真实比例
+        const scaleX = (displayWidth - padding * 2) / width;
+        const scaleY = (displayHeight - padding * 2) / height;
+        const scale = Math.min(scaleX, scaleY);
+        
+        console.log(`画布尺寸: ${displayWidth}x${displayHeight}, DPR: ${dpr}`);
+        console.log(`轮廓范围: ${width.toFixed(3)}x${height.toFixed(3)}m`);
+        console.log(`缩放比例: ${scale.toFixed(2)}`);
+        
+        // 转换坐标到画布空间（居中显示，保持比例）
+        const centerX = displayWidth / 2;
+        const centerY = displayHeight / 2;
+        const offsetX = (maxX + minX) / 2;
+        const offsetY = (maxY + minY) / 2;
+        
+        const toCanvasX = (x) => centerX + (x - offsetX) * scale;
+        const toCanvasY = (y) => centerY - (y - offsetY) * scale;
+        
+        // 绘制所有多边形的轮廓
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 1;
+        
+        console.log(`开始绘制 ${polygons.length} 个多边形`);
+        
+        polygons.forEach((polygon, idx) => {
+            console.log(`绘制多边形 ${idx}, 顶点数: ${polygon.length}`);
+            console.log(`  顶点:`, polygon.map(p => `(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`).join(', '));
+            
+            ctx.beginPath();
+            const startX = toCanvasX(polygon[0].x);
+            const startY = toCanvasY(polygon[0].y);
+            ctx.moveTo(startX, startY);
+            console.log(`  moveTo(${startX.toFixed(1)}, ${startY.toFixed(1)})`);
+            
+            for (let i = 1; i < polygon.length; i++) {
+                const x = toCanvasX(polygon[i].x);
+                const y = toCanvasY(polygon[i].y);
+                ctx.lineTo(x, y);
+                console.log(`  lineTo(${x.toFixed(1)}, ${y.toFixed(1)})`);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            
+            // 绘制顶点
+            ctx.fillStyle = '#ff0000';
+            polygon.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(toCanvasX(p.x), toCanvasY(p.y), 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        });
+        
+        // 显示信息标签
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px Arial';
+        ctx.fillText(`面类型: ${faceType}`, 10, 20);
+        ctx.fillText(`尺寸: ${(width * 1000).toFixed(0)} x ${(height * 1000).toFixed(0)} mm`, 10, 35);
+        ctx.fillText(`比例: 1:${(1/scale).toFixed(0)}`, 10, 50);
+        ctx.fillText(`矩形数: ${polygons.length}`, 10, 65);
+        
+        // 绘制比例尺
+        this.drawScale(ctx, displayWidth, displayHeight, scale, padding);
+        
+        console.log('轮廓已绘制到画布（高分辨率）');
+    }
+    
+    /**
+     * 绘制比例尺
+     */
+    drawScale(ctx, displayWidth, displayHeight, scale, padding) {
+        // 在画布底部绘制比例尺
+        const scaleLength = 1.0; // 1米的参考长度
+        const scaleLengthPx = scaleLength * scale;
+        
+        if (scaleLengthPx < 20) return; // 太小不绘制
+        
+        const scaleY = displayHeight - padding / 2;
+        const scaleStartX = padding;
+        const scaleEndX = scaleStartX + scaleLengthPx;
+        
+        // 绘制比例尺线
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(scaleStartX, scaleY);
+        ctx.lineTo(scaleEndX, scaleY);
+        
+        // 绘制端点标记
+        ctx.moveTo(scaleStartX, scaleY - 5);
+        ctx.lineTo(scaleStartX, scaleY + 5);
+        ctx.moveTo(scaleEndX, scaleY - 5);
+        ctx.lineTo(scaleEndX, scaleY + 5);
+        ctx.stroke();
+        
+        // 标注长度
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '10px Arial';
+        ctx.fillText('1000 mm', scaleStartX + scaleLengthPx / 2 - 20, scaleY - 8);
     }
 }
 
