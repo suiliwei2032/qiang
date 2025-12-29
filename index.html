@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 墙体建模工具</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+        <button id="drawBtn" class="btn">绘制墙体</button>
+        <button id="selectBtn" class="btn">选择墙面</button>
+        <div class="param-group">
+            <label>墙体高度:</label>
+            <input type="number" id="wallHeight" value="3000" step="10" min="10">
+            <span>mm</span>
+        </div>
+        <div class="param-group">
+            <label>墙体厚度:</label>
+            <input type="number" id="wallThickness" value="200" step="1" min="1">
+            <span>mm</span>
+        </div>
+        <button id="clearBtn" class="btn clear-btn">清空</button>
+    </div>
+
+    <!-- 四个视口容器 -->
+    <div class="viewport-container">
+        <!-- 2D 绘制窗口（左上） -->
+        <div class="viewport" id="viewport-2d">
+            <div class="viewport-title">2D 绘制窗口</div>
+            <canvas id="canvas-2d"></canvas>
+        </div>
+
+        <!-- 3D 模型窗口（右上） -->
+        <div class="viewport" id="viewport-3d">
+            <div class="viewport-title">3D 模型窗口</div>
+            <canvas id="canvas-3d"></canvas>
+            <div class="viewport-controls">
+                <button id="toggleWireframeBtn" class="btn">线框: 开</button>
+            </div>
+        </div>
+
+        <!-- 面编辑窗口（左下） -->
+        <div class="viewport" id="viewport-face">
+            <div class="viewport-title">面编辑窗口</div>
+            <canvas id="canvas-face"></canvas>
+        </div>
+
+        <!-- 选中面轮廓线窗口（右下） -->
+        <div class="viewport" id="viewport-outline">
+            <div class="viewport-title">选中面轮廓线窗口</div>
+            <canvas id="canvas-outline"></canvas>
+        </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar">
+        <span id="statusText">就绪 - 选择一个功能开始操作</span>
+        <span id="coordsText"></span>
+    </div>
+
+    <!-- 引入 Three.js -->
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    
+    <!-- 引入 three-bvh-csg 库用于布尔运算 -->
+    <script src="https://unpkg.com/three-bvh-csg@0.0.59/build/three-bvh-csg.umd.js"></script>
+    
+    <!-- 引入 BufferGeometryUtils -->
+    <script>
+        // 手动加载BufferGeometryUtils
+        const utilsScript = document.createElement('script');
+        utilsScript.src = 'https://unpkg.com/three@0.158.0/examples/js/utils/BufferGeometryUtils.js';
+        utilsScript.onload = function() {
+            console.log('BufferGeometryUtils加载成功');
+            window.UTILS_LOADED = true;
+        };
+        utilsScript.onerror = function() {
+            console.warn('BufferGeometryUtils加载失败，将使用备用方案');
+            // 创建一个简单的合并函数作为备用
+            if (!THREE.BufferGeometryUtils) {
+                THREE.BufferGeometryUtils = {
+                    mergeBufferGeometries: function(geometries) {
+                        console.log('使用备用几何体合并方案');
+                        return geometries[0]; // 简单返回第一个几何体
+                    }
+                };
+            }
+        };
+        document.head.appendChild(utilsScript);
+    </script>
+    
+    <!-- 主应用脚本 -->
+    <script src="js/app.js"></script>
+</body>
+</html>

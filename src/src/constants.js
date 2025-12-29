@@ -1,0 +1,56 @@
+// 应用常量配置
+export const CONSTANTS = {
+  // 默认墙体参数
+  DEFAULT_WALL_HEIGHT: 2800,
+  DEFAULT_WALL_THICKNESS: 200,
+  
+  // 2D视图参数
+  GRID_SIZE: 1000,
+  MIN_SCALE: 0.01,
+  MAX_SCALE: 1,
+  ZOOM_FACTOR: 0.1,
+  POINT_SELECT_THRESHOLD: 10,
+  POINT_RADIUS: 5,
+  
+  // 3D视图参数
+  CAMERA_FOV: 60,
+  CAMERA_NEAR: 1,
+  CAMERA_FAR: 50000,
+  CAMERA_DISTANCE: 5000,
+  GRID_SIZE_3D: 10000,
+  GRID_DIVISIONS: 20,
+  
+  // 面选择参数
+  NORMAL_THRESHOLD: 0.999,
+  DISTANCE_THRESHOLD: 10,
+  ISLAND_DISTANCE_THRESHOLD: 20,
+  EDGE_THRESHOLD: 1.0,
+  
+  // 面编辑器参数
+  FACE_PADDING: 1.3,
+  FACE_CAMERA_DISTANCE: 5000,
+  
+  // 颜色配置
+  COLORS: {
+    BACKGROUND_3D: 0x1a2332,
+    BACKGROUND_2D: '#1a2332',
+    GRID: '#3a4a5a',
+    WALL_FILL: '#ccc',
+    WALL_STROKE: '#333',
+    POINT: '#ff0000',
+    TEMP_WALL: '#007bff',
+    HIGHLIGHT: 0x00ff00,
+    DEFAULT_MATERIAL: 0xffffff
+  },
+  
+  // 光照配置
+  LIGHTING: {
+    AMBIENT_INTENSITY: 0.6,
+    DIRECTIONAL_INTENSITY: 0.4
+  },
+  
+  // 导出配置
+  EXPORT: {
+    SCALE_TO_METERS: 0.001
+  }
+};
