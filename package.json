@@ -1,19 +1,18 @@
 {
-  "name": "threejs-wall-modeling-tool",
+  "name": "wall-editor",
   "version": "1.0.0",
-  "description": "基于 Three.js 的交互式墙体建模工具",
-  "main": "index.html",
+  "description": "Three.js墙体绘制编辑工具",
+  "type": "module",
   "scripts": {
-    "dev": "npx live-server . --port=8080 --no-browser --ignore=node_modules",
-    "start": "npm run dev",
-    "build": "echo 'Build completed'",
-    "preview": "npx http-server . -p 8080"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.158.0"
+    "three": "^0.160.0",
+    "three-bvh-csg": "^0.0.16"
   },
   "devDependencies": {
-    "live-server": "^1.2.2",
-    "http-server": "^14.1.1"
+    "vite": "^5.0.0"
   }
 }
