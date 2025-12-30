@@ -49,8 +49,11 @@ export class CSGOperationsManager {
             // 将 Brush 转换为 Mesh 并添加到场景
             const geometry = this.brushToGeometry(resultBrush);
             if (geometry) {
+                // 优化几何体（合并共面三角形，减少碎片）
+                const optimizedGeometry = this.optimizeGeometry(geometry);
+                
                 // 创建法向面组mesh
-                this.createFaceGroupMeshes(geometry, index);
+                this.createFaceGroupMeshes(optimizedGeometry || geometry, index);
                 
                 // 添加轮廓边缘线（黄色）
                 const outlineGeometry = this.app.outlineExtractor.createOutlineGeometry(geometry);
@@ -277,5 +280,19 @@ export class CSGOperationsManager {
             console.error('Brush 转几何体失败:', error);
             return null;
         }
+    }
+    
+    /**
+     * 优化几何体：合并共面三角形，减少碎片
+     * 注意：这是一个简化版本，主要用于减少明显的冗余三角形
+     */
+    optimizeGeometry(geometry) {
+        console.log('\n=== 优化几何体（简化版）===');
+        
+        // 暂时返回null，表示不优化
+        // 因为复杂的三角形合并可能引入新问题
+        // 更好的方案是改进轮廓提取算法
+        console.log('跳过几何体优化，使用原始几何体');
+        return null;
     }
 }

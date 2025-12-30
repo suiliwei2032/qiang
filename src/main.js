@@ -15,3 +15,6 @@ console.log('Brush:', typeof Brush);
 console.log('Evaluator:', typeof Evaluator);
 console.log('SUBTRACTION:', SUBTRACTION);
 
+// 导入主应用逻辑 (在全局变量设置完成后)
+import('./app.js');
+
